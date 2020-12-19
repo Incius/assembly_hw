@@ -1,7 +1,6 @@
 
 
 #include <iostream>
-
 #include <pthread.h>
 #include <semaphore.h>
 #include <windows.h>
@@ -9,89 +8,78 @@
 #include <string>
 #include <vector>
 
-
-
 using namespace std;
 
-
-
+//класс семафора
 class Semaphore {
 private:
-    bool            signaled;   // <- changed
+    bool signaled;
     pthread_mutex_t m;
     pthread_cond_t  c;
-
-    void Lock() { pthread_mutex_lock(&m); }          // <- helper inlines added
+    //методы мьютекса
+    void Lock() { pthread_mutex_lock(&m); }
     void Unlock() { pthread_mutex_unlock(&m); }
 public:
-
-    /* -- CONSTRUCTOR/DESTRUCTOR */
-
     Semaphore(bool);
-
-    //~Semaphore();
-
-    /* -- SEMAPHORE OPERATIONS */
-
-    void P();   // changed to void: you don't return anything
+    void P();
     void V();
 };
-Semaphore::Semaphore(bool s) {        // don't use leading underscores on identifiers
+//методы инкремента и декремента
+Semaphore::Semaphore(bool s) {
     signaled = s;
-    pthread_mutex_init(&m,nullptr);
+    pthread_mutex_init(&m, nullptr);
 }
-    void Semaphore::P(){
-    Lock();              // added
-    while (!signaled){   // this must be a loop, not if!
+void Semaphore::P() {
+    Lock();
+    while (!signaled) {
         pthread_cond_wait(&c, &m);
     }
     signaled = false;
     Unlock();
 }
 
-void Semaphore::V(){
+void Semaphore::V() {
     bool previously_signaled;
     Lock();
-    previously_signaled = signaled; 
+    previously_signaled = signaled;
     signaled = true;
-    Unlock();  // always release the mutex before signaling
+    Unlock();
     if (!previously_signaled)
-      pthread_cond_signal(&c); // this may be an expensive kernel op, so don't hold mutex
+        pthread_cond_signal(&c);
 }
-
+//семафор и потоки
 Semaphore sem = Semaphore(0);
 pthread_t TobacoSmoker;
 pthread_t PaperSmoker;
 pthread_t MatchesSmoker;
 pthread_t Dealer;
+//метод курильщика
 void* Smoke(void* i)
 {
     int a = *((int*)i);
-    // wait for a signal from the main proc
-    // by attempting to decrement the semaphore
+    //ожидание сигнала от дилера
     sem.P();
 
-    // this call blocks until the semaphore's count
-    // is increased from the main proc
+    std::cout << "Smoker " << a << " started making a sigarette" << std::endl; // response message
 
-    std::cout << "Smoker "<<a<<" started making a sigarette"<<std::endl; // response message
-
-    // wait for 3 seconds to imitate some work
-    // being done by the thread
+    //процесс
     Sleep(3000);
 
     std::cout << "Smoker " << a << " finished making a sigarette" << std::endl;
 
-    // signal the main proc back
+    //сигнал дилеру
     sem.V();
     return NULL;
 }
 void* Deal(void* i)
 {
     int j = *((int*)i);
+    //цикл выдачи
     for (size_t i = 0; i < j; i++)
     {
+        //выбор компонентов
         int choice = rand() % 3;
+        //запуск курильщиков
         switch (choice)
         {
         case(0):
@@ -107,8 +95,10 @@ void* Deal(void* i)
             pthread_create(&MatchesSmoker, 0, Smoke, (void*)&choice);
             break;
         }
+        //сигнал потоку
         sem.V();
         Sleep(4000);
+        //ожидание сигнала от потока
         sem.P();
     }
     return NULL;
@@ -117,10 +107,9 @@ void* Deal(void* i)
 
 int main()
 {
-    int i ;
-
+    int i;
+    //ввод числа итераций
     std::string input;
-    std::cout << "[main] Send the signal\n"; // message
     boolean flag = false;
     do {
         try {
@@ -133,6 +122,7 @@ int main()
             std::cout << "incorrect input" << std::endl;
         }
     } while (!flag);
+    //запуск потоков
     pthread_create(&Dealer, 0, Deal, (void*)&i);
     pthread_join(Dealer, NULL);
     std::cout << "finish" << std::endl;
